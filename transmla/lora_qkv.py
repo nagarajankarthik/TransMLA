@@ -5,7 +5,7 @@ from typing import Optional, Tuple
 from transformers.modeling_utils import ALL_ATTENTION_FUNCTIONS
 from transformers.models.deepseek_v3.modeling_deepseek_v3 import apply_rotary_pos_emb_interleave
 
-from utils import pca_calc, get_qkv_calibrate_outputs, evaluate_ppl, statistics_qkv_rmsnorm, use_original_norm_weights
+from utils import pca_calc, get_qkv_calibrate_outputs, evaluate_ppl, statistics_qkv_rmsnorm, use_original_norm_weights, use_original_norm_weights_post_proj
 
  
 def repeat_kv(hidden_states: torch.Tensor, n_rep: int) -> torch.Tensor:
@@ -95,7 +95,8 @@ class LoraQKV(nn.Module):
             dtype=self.dtype,
         )
         if use_qkv_norm:
-            self.kv_a_layernorm = nn.RMSNorm(kv_lora_rank, device=self_attn.k_proj.weight.device, dtype=self.dtype, eps=rms_norm_eps)
+            # self.kv_a_layernorm = nn.RMSNorm(kv_lora_rank, device=self_attn.k_proj.weight.device, dtype=self.dtype, eps=rms_norm_eps)
+            self.k_post_proj_layernorm = nn.RMSNorm(self.head_dim, device=self_attn.k_proj.weight.device, dtype=self.dtype, eps=rms_norm_eps)
         self.kv_b_proj = nn.Linear(
             kv_lora_rank,
             self.num_attention_heads * self.head_dim * 2,
@@ -387,10 +388,13 @@ class LoraQKV(nn.Module):
         q_rope, k_rope = apply_rotary_pos_emb_interleave(q_rope, k_rope, cos[ :, :, : : self.collapse], sin[ :, :, : : self.collapse])
         query_states = torch.cat([q_nope, q_rope], dim=-1)
 
-        if hasattr(self, "kv_a_layernorm"):
-            kv_nope = self.kv_a_layernorm(kv_nope)
+        # Original location of kv_a_layernorm
+        # if hasattr(self, "kv_a_layernorm"):
+        #     kv_nope = self.kv_a_layernorm(kv_nope)
         kv_nope = self.kv_b_proj(kv_nope).view(bsz, q_len, self.num_attention_heads, self.head_dim * 2).transpose(1, 2)
         k_nope, value_states = kv_nope.split([self.head_dim, self.head_dim],dim=-1)
+        if hasattr(self, "k_post_proj_layernorm"):
+            k_nope = self.k_post_proj_layernorm(k_nope)
         key_states = torch.cat([k_nope, repeat_kv(k_rope, self.num_attention_heads)], dim=-1)
 
         attn_output, attn_weights = self.attention_function(
@@ -415,18 +419,8 @@ def low_rank_qkv(model, tokenizer, train_loader, test_loader, **kwargs):
     message = "Calibrating rope-removed model's qkv outputs"
     rm_rope_qkv_outputs = get_qkv_calibrate_outputs(model, train_loader, message)
 
-    # Store original norm weights before replacing attention modules
-    original_norm_weights = []
-    if kwargs.get("use_original_norm_weights", False) and kwargs.get("use_qkv_norm", False):
-        for layer_idx, layer in enumerate(model.model.layers):
-            original_self_attn = layer.self_attn
-            norm_weights = {}
-            if hasattr(original_self_attn, "q_norm") and hasattr(original_self_attn.q_norm, "weight"):
-                norm_weights["q_norm"] = original_self_attn.q_norm.weight.data.clone()
-            if hasattr(original_self_attn, "k_norm") and hasattr(original_self_attn.k_norm, "weight"):
-                norm_weights["k_norm"] = original_self_attn.k_norm.weight.data.clone()
-            original_norm_weights.append(norm_weights)
 
+    # qkv_outputs_pre_lora = get_qkv_calibrate_outputs(model, train_loader, message="Check qkv outputs before lora")
     for layer_idx, layer in enumerate(model.model.layers):
         setattr(layer, "self_attn", LoraQKV(
             layer.self_attn,
@@ -441,20 +435,25 @@ def low_rank_qkv(model, tokenizer, train_loader, test_loader, **kwargs):
             balance_kv_ratio=kwargs["balance_kv_ratio"],
             rms_norm_eps=model.config.rms_norm_eps,
         ))
+
     
     if kwargs["use_qkv_norm"]:
         if kwargs.get("use_original_norm_weights", False):
+            original_norm_weights = kwargs["original_norm_weights"]
             # Use original norm weights
             for layer_idx, layer in enumerate(model.model.layers):
                 norm_weights = original_norm_weights[layer_idx] if layer_idx < len(original_norm_weights) else {}
-                use_original_norm_weights(
-                    layer.self_attn,
-                    norm_weights.get("q_norm"),
-                    norm_weights.get("k_norm")
-                )
+                # use_original_norm_weights(
+                #     layer.self_attn,
+                #     norm_weights["q_norm"],
+                #     norm_weights["k_norm")
+                # )
+                use_original_norm_weights_post_proj(layer.self_attn, 
+                                                    norm_weights["q_norm"], 
+                                                    norm_weights["k_norm"])
         else:
             # Compute norm weights from calibration data
-            lora_qkv_outputs = get_qkv_calibrate_outputs(model, train_loader)
+            lora_qkv_outputs = get_qkv_calibrate_outputs(model, train_loader, message="qkv check for norm weights")
             for layer_idx, layer in enumerate(model.model.layers):
                 # if len(lora_qkv_outputs["q_a_proj"]) > layer_idx 
                 # is used to check if q_a_proj exists for the current layer
