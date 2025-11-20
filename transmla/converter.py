@@ -60,6 +60,23 @@ def main(args):
 
     # get model, tokenizer
     model, tokenizer = load_model_and_tokenizer(args)
+
+    # for name, module in model.named_modules():
+    #     print(name)
+
+    # Store original norm weights before replacing attention modules
+    original_norm_weights = []
+    if args.use_original_norm_weights and args.use_qkv_norm:
+        for layer_idx, layer in enumerate(model.model.layers):
+            original_self_attn = layer.self_attn
+            norm_weights = {}
+            if hasattr(original_self_attn, "q_norm") and hasattr(original_self_attn.q_norm, "weight"):
+                norm_weights["q_norm"] = original_self_attn.q_norm.weight.data.clone()
+            if hasattr(original_self_attn, "k_norm") and hasattr(original_self_attn.k_norm, "weight"):
+                norm_weights["k_norm"] = original_self_attn.k_norm.weight.data.clone()
+            original_norm_weights.append(norm_weights)
+
+
     # get dataset
     train_loader, test_loader = get_dataset_loader(tokenizer, **vars(args))
 
@@ -95,7 +112,11 @@ def main(args):
     print("LoraQKV Model".center(60))
     print("="*60 + "\n")
 
-    model = low_rank_qkv(model, tokenizer, train_loader, test_loader, **vars(args))
+    args_dict = vars(args)
+    if args.use_original_norm_weights:
+        args_dict["original_norm_weights"] = original_norm_weights
+
+    model = low_rank_qkv(model, tokenizer, train_loader, test_loader, **args_dict)
 
     # save model
     print(f"\nSaving model and tokenizer to {args.save_path}...")
