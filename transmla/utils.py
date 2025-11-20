@@ -433,6 +433,36 @@ def use_original_norm_weights(self_attn, q_norm_weight, k_norm_weight):
             self_attn.kv_a_proj_with_mqa.weight.device
         ).to(self_attn.dtype)
 
+def use_original_norm_weights_post_proj(self_attn, q_norm_weight, k_norm_weight):
+    """
+    Use original Qwen3 model's RMS norm weights instead of computing from calibration data.
+    Apply RMSNorm to the k_nope segment of the tensor obtained from kv_b_proj.
+    
+    Since the original q_norm and k_norm have shape [head_dim] while q_a_layernorm and 
+    kv_a_layernorm have shapes [q_lora_rank] and [kv_lora_rank] respectively, we use the 
+    mean value of the original norm weights as a scalar and set all elements of the new 
+    norm weights to that value.
+    
+    Args:
+        self_attn: The attention module (LoraQKV instance) containing q_a_layernorm and
+                   kv_a_layernorm modules
+        q_norm_weight: Original q_norm.weight tensor from Qwen3 attention, shape [head_dim]
+        k_norm_weight: Original k_norm.weight tensor from Qwen3 attention, shape [head_dim]
+    """
+    if q_norm_weight is not None and hasattr(self_attn, "q_a_layernorm"):
+        # Use mean of original q_norm weights as scalar value
+        q_norm_scalar = q_norm_weight.mean().item()
+        self_attn.q_a_layernorm.weight.data.fill_(q_norm_scalar)
+        self_attn.q_a_layernorm.weight.data = self_attn.q_a_layernorm.weight.data.to(
+            self_attn.q_a_proj.weight.device
+        ).to(self_attn.dtype)
+    
+    if k_norm_weight is not None and hasattr(self_attn, "k_post_proj_layernorm"):
+        assert k_norm_weight.numel() == self_attn.k_post_proj_layernorm.weight.numel(), f" There are {k_norm_weight.numel()} elements in the RMSNorm layer for the original model. There are {self_attn.k_post_proj_layernorm.weight.numel()} elements in the RMSNorm layer for the converted model."
+        self_attn.k_post_proj_layernorm.weight.data.copy_(k_norm_weight.data)
+        self_attn.k_post_proj_layernorm.weight.data.to(self_attn.k_post_proj_layernorm.weight.device).to(self_attn.dtype)
+
+
 def statistics_qkv_rmsnorm(self_attn, q_a_outputs, kv_a_outputs):
     """
     Compute and set RMS normalization statistics for q_a_layernorm and kv_a_layernorm
