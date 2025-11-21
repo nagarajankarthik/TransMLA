@@ -157,6 +157,7 @@ class LoraQKV(nn.Module):
         # Result: scaling ≈ 1.2247
         original_scaling = getattr(self.config, "query_pre_attn_scalar", self.head_dim)**-0.5
         scaling = original_scaling / self.scaling
+        scaling = 1.0
         if self.q_lora_rank is not None:
             # Get original q_proj weight: [3,584, 4,096] for Qwen3-4B
             q_weight = self_attn.q_proj.weight.data.to(torch.float64)
@@ -418,7 +419,7 @@ class LoraQKV(nn.Module):
             value_states,
             attention_mask,
             dropout=0.0 if not self.training else self.attention_dropout,
-            scaling=self.scaling,
+            scaling=(self.head_dim)**-0.5,
             softcap=getattr(self.config, "attn_logit_softcapping", None)
         )
 
