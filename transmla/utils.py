@@ -449,6 +449,8 @@ def use_original_norm_weights_post_proj(self_attn, q_norm_weight, k_norm_weight)
         q_norm_weight: Original q_norm.weight tensor from Qwen3 attention, shape [head_dim]
         k_norm_weight: Original k_norm.weight tensor from Qwen3 attention, shape [head_dim]
     """
+    num_weights_original_q = q_norm_weight.numel()
+    num_weights_original_k = k_norm_weight.numel()
     if q_norm_weight is not None and hasattr(self_attn, "q_nope_rmsnorm"):
         assert q_norm_weight.numel() == self_attn.q_nope_rmsnorm.weight.numel(), "Dimension mismatch in use_original_norm_weights_post_proj for queries."
         self_attn.q_nope_rmsnorm.weight.data.copy_(q_norm_weight.data)
@@ -459,6 +461,27 @@ def use_original_norm_weights_post_proj(self_attn, q_norm_weight, k_norm_weight)
         self_attn.k_nope_rmsnorm.weight.data.copy_(k_norm_weight.data)
         self_attn.k_nope_rmsnorm.weight.data.to(self_attn.k_nope_rmsnorm.weight.device).to(self_attn.dtype)
 
+    if q_norm_weight is not None and hasattr(self_attn, "q_rope_rmsnorm"):
+        assert num_weights_original_q % self_attn.q_rope_rmsnorm.weight.numel() == 0, "Number of RMSNorm weights in original model is not an integer multiple of qk_mqa_dim"
+        weights_multiplicity = num_weights_original_q / self_attn.q_rope_rmsnorm.weight.numel()
+        q_rope_rmsnorm_weight = q_norm_weight.clone()
+        new_shape = list(q_rope_rmsnorm_weight.shape)
+        new_shape[-1] /= weights_multiplicity
+        new_shape += [weights_multiplicity]
+        new_shape = tuple(int(new_shape[i]) for i in range(len(new_shape)))
+        q_rope_rmsnorm_weight = q_rope_rmsnorm_weight.reshape(new_shape).mean(-1,keepdim=False)
+        self_attn.q_rope_rmsnorm.weight.data.copy_(q_rope_rmsnorm_weight.data)
+
+    if k_norm_weight is not None and hasattr(self_attn, "k_rope_rmsnorm"):
+        assert num_weights_original_k % self_attn.k_rope_rmsnorm.weight.numel() == 0, "Number of RMSNorm weights in original model is not an integer multiple of qk_mqa_dim"
+        weights_multiplicity = num_weights_original_k / self_attn.k_rope_rmsnorm.weight.numel()
+        k_rope_rmsnorm_weight = k_norm_weight.clone()
+        new_shape = list(k_rope_rmsnorm_weight.shape)
+        new_shape[-1] /= weights_multiplicity
+        new_shape += [weights_multiplicity]
+        new_shape = tuple(int(new_shape[i]) for i in range(len(new_shape)))
+        k_rope_rmsnorm_weight = k_rope_rmsnorm_weight.reshape(new_shape).mean(-1,keepdim=False)
+        self_attn.k_rope_rmsnorm.weight.data.copy_(k_rope_rmsnorm_weight.data)
 
 def statistics_qkv_rmsnorm(self_attn, q_a_outputs, kv_a_outputs):
     """
