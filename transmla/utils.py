@@ -449,18 +449,15 @@ def use_original_norm_weights_post_proj(self_attn, q_norm_weight, k_norm_weight)
         q_norm_weight: Original q_norm.weight tensor from Qwen3 attention, shape [head_dim]
         k_norm_weight: Original k_norm.weight tensor from Qwen3 attention, shape [head_dim]
     """
-    if q_norm_weight is not None and hasattr(self_attn, "q_a_layernorm"):
-        # Use mean of original q_norm weights as scalar value
-        q_norm_scalar = q_norm_weight.mean().item()
-        self_attn.q_a_layernorm.weight.data.fill_(q_norm_scalar)
-        self_attn.q_a_layernorm.weight.data = self_attn.q_a_layernorm.weight.data.to(
-            self_attn.q_a_proj.weight.device
-        ).to(self_attn.dtype)
+    if q_norm_weight is not None and hasattr(self_attn, "q_nope_rmsnorm"):
+        assert q_norm_weight.numel() == self_attn.q_nope_rmsnorm.weight.numel(), "Dimension mismatch in use_original_norm_weights_post_proj for queries."
+        self_attn.q_nope_rmsnorm.weight.data.copy_(q_norm_weight.data)
+        self_attn.q_nope_rmsnorm.weight.data.to(self_attn.q_nope_rmsnorm.weight.device).to(self_attn.dtype)
     
-    if k_norm_weight is not None and hasattr(self_attn, "k_post_proj_layernorm"):
-        assert k_norm_weight.numel() == self_attn.k_post_proj_layernorm.weight.numel(), f" There are {k_norm_weight.numel()} elements in the RMSNorm layer for the original model. There are {self_attn.k_post_proj_layernorm.weight.numel()} elements in the RMSNorm layer for the converted model."
-        self_attn.k_post_proj_layernorm.weight.data.copy_(k_norm_weight.data)
-        self_attn.k_post_proj_layernorm.weight.data.to(self_attn.k_post_proj_layernorm.weight.device).to(self_attn.dtype)
+    if k_norm_weight is not None and hasattr(self_attn, "k_nope_rmsnorm"):
+        assert k_norm_weight.numel() == self_attn.k_nope_rmsnorm.weight.numel(), f" There are {k_norm_weight.numel()} elements in the RMSNorm layer for the original model. There are {self_attn.k_nope_rmsnorm.weight.numel()} elements in the RMSNorm layer for the converted model."
+        self_attn.k_nope_rmsnorm.weight.data.copy_(k_norm_weight.data)
+        self_attn.k_nope_rmsnorm.weight.data.to(self_attn.k_nope_rmsnorm.weight.device).to(self_attn.dtype)
 
 
 def statistics_qkv_rmsnorm(self_attn, q_a_outputs, kv_a_outputs):
