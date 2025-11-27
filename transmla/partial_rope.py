@@ -15,6 +15,16 @@ def rotate_half(x, group):
     return torch.cat(rotate_x, dim=-1)
 
 def apply_rotary_pos_emb(q, k, cos, sin, rope_head=1):
+    """
+    Shapes of input tensors 
+    q: (batch_size, num_attention_heads, seq_len, num_key_value_heads*head_dim)
+    k: (batch_size, num_attention_heads, seq_len, num_key_value_heads*head_dim)
+    cos: (1, seq_len, head_dim)
+    sin: (1, seq_len, head_dim)
+
+
+    Can control number of query heads with positional information using rope_head parameter.
+    """
     head_dim = cos.shape[-1]
     rope_dim = head_dim * rope_head
     nope_dim = q.shape[-1] - rope_dim
@@ -25,6 +35,7 @@ def apply_rotary_pos_emb(q, k, cos, sin, rope_head=1):
     sin = sin.unsqueeze(1)
 
     ###### this is for rotate-specific deepseek model (rotate not chunk but interval) #########
+    # The view operation extracts pairs of elements from the first and second halves of head_dim for each head and inserts them in consecutive positions in the reshaped tensor. 
     b, h, s, d = q_rope.shape
     q_rope = q_rope.view(b, h, s, d // head_dim, head_dim // 2, 2).transpose(4, 5).reshape(b, h, s, d)
     ###### this is for rotate-specific deepseek model (rotate not chunk but interval) #########
@@ -65,11 +76,13 @@ class PartialRope(nn.Module):
         self.k_proj = self_attn.k_proj
         self.v_proj = self_attn.v_proj
         self.o_proj = self_attn.o_proj
+        self.q_norm = self_attn.q_norm
+        self.k_norm = self_attn.k_norm
         self._insert_kv_up_proj()
         if key_outputs is not None:
             Rk = self.joint_complex_pca(key_outputs, freqfold)
-            self.rotate_k_proj(Rk, freqfold=freqfold)
-            self.rotate_k_up_proj(Rk, freqfold=freqfold)
+            # self.rotate_k_proj(Rk, freqfold=freqfold)
+            # self.rotate_k_up_proj(Rk, freqfold=freqfold)
             
     def _insert_kv_up_proj(self):
         self.k_up_proj = nn.Linear(self.latent_dim, self.hidden_size, bias=False, dtype=self.k_proj.weight.dtype, device=self.k_proj.weight.device)
@@ -150,13 +163,19 @@ class PartialRope(nn.Module):
         cache_position: Optional[torch.LongTensor] = None,
         position_embeddings: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Tuple[torch.Tensor]]]:
-        bsz, q_len, _ = hidden_states.size()
+        """
+        The position_embeddings parameter is a tuple of two torch tensors. Each tensor has shape (1, seq_len, head_dim)
+        """
 
+        bsz, q_len, _ = hidden_states.size()
         query_states = self.q_proj(hidden_states)
         key_states = self.k_proj(hidden_states)
         value_states = self.v_proj(hidden_states)
 
         query_states = query_states.view(bsz, q_len, self.num_attention_heads, self.head_dim)
+        query_states = self.q_norm(query_states)
+        key_states = key_states.view(bsz, q_len, self.num_key_value_heads, self.head_dim)
+        key_states = self.k_norm(key_states)
         k_up_weight = self.k_up_proj.weight.view(self.num_attention_heads, self.head_dim, self.latent_dim)
         query_states = torch.einsum("bthd,hdc->bhtc", query_states, k_up_weight)
     
