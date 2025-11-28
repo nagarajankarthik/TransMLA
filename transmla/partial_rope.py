@@ -18,9 +18,11 @@ def apply_rotary_pos_emb(q, k, cos, sin, rope_head=1):
     """
     Shapes of input tensors 
     q: (batch_size, num_attention_heads, seq_len, num_key_value_heads*head_dim)
-    k: (batch_size, num_attention_heads, seq_len, num_key_value_heads*head_dim)
+    k: (batch_size, 1, seq_len, num_key_value_heads*head_dim)
     cos: (1, seq_len, head_dim)
     sin: (1, seq_len, head_dim)
+
+    Performing MQA with 'num_attention_heads' query heads and a single key-value head. The hidden size of queries, keys and values is latent_dim = num_key_value_heads*head_dim.
 
 
     Can control number of query heads with positional information using rope_head parameter.
@@ -35,7 +37,11 @@ def apply_rotary_pos_emb(q, k, cos, sin, rope_head=1):
     sin = sin.unsqueeze(1)
 
     ###### this is for rotate-specific deepseek model (rotate not chunk but interval) #########
-    # The view operation extracts pairs of elements from the first and second halves of head_dim for each head and inserts them in consecutive positions in the reshaped tensor. 
+    # The view operation extracts pairs of elements two positions apart from the head_dim for each head and inserts them in consecutive positions in the reshaped tensor.
+    # As a concrete example, it first transforms [1,2,3,4,5,6,7,8] into [[1,2],[3,4],[5,6],[7,8]]. The transpose operation then makes this [[1,3,5,7],[2,4,6,8]]. The final 
+    # reshape makes this [1,3,5,7,2,4,6,8]. Based on this link (https://github.com/rasbt/LLMs-from-scratch/blob/main/ch05/11_qwen3/standalone-qwen3.ipynb), the reason for 
+    # doing this is that the first and second halves of cos and sin along head_dim are identical. As a concrete example, the head_dim of cos for one particular token might 
+    # look like [0.2, 0.4, 0.6, 0.8, 0.2, 0.4, 0.6, 0.8].
     b, h, s, d = q_rope.shape
     q_rope = q_rope.view(b, h, s, d // head_dim, head_dim // 2, 2).transpose(4, 5).reshape(b, h, s, d)
     ###### this is for rotate-specific deepseek model (rotate not chunk but interval) #########
