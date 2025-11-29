@@ -26,12 +26,71 @@ def apply_rotary_pos_emb(q, k, cos, sin, rope_head=1):
 
 
     Can control number of query heads with positional information using rope_head parameter.
+
+    See https://github.com/huggingface/transformers/issues/39687 and https://github.dev/huggingface/transformers/blob/main/src/transformers/models/qwen3/modeling_qwen3.py.
     """
     head_dim = cos.shape[-1]
     rope_dim = head_dim * rope_head
+    rope_dim = q.shape[-1]
     nope_dim = q.shape[-1] - rope_dim
     q_rope, q_nope = q.split([rope_dim, nope_dim], dim=-1)
     k_rope, k_nope = k.split([rope_dim, nope_dim], dim=-1)
+
+    cos = cos.unsqueeze(1)
+    sin = sin.unsqueeze(1)
+
+    ###### this is for rotate-specific deepseek model (rotate not chunk but interval) #########
+    # The view operation extracts pairs of elements two positions apart from the head_dim for each head and inserts them in consecutive positions in the reshaped tensor.
+    # As a concrete example, it first transforms [1,2,3,4,5,6,7,8] into [[1,2],[3,4],[5,6],[7,8]]. The transpose operation then makes this [[1,3,5,7],[2,4,6,8]]. The final 
+    # reshape makes this [1,3,5,7,2,4,6,8]. Based on this link (https://github.com/rasbt/LLMs-from-scratch/blob/main/ch05/11_qwen3/standalone-qwen3.ipynb), the reason for 
+    # doing this is that the first and second halves of cos and sin along head_dim are identical. As a concrete example, the head_dim of cos for one particular token might 
+    # look like [0.2, 0.4, 0.6, 0.8, 0.2, 0.4, 0.6, 0.8].
+    b, h, s, d = q_rope.shape
+    # q_rope = q_rope.view(b, h, s, d // head_dim, head_dim // 2, 2).transpose(4, 5).reshape(b, h, s, d)
+    ###### this is for rotate-specific deepseek model (rotate not chunk but interval) #########
+
+    rope_repeat = q_rope.shape[-1] // cos.shape[-1]
+    q_rope_embed = q_rope * cos.repeat(1,1,1,rope_repeat) + rotate_half(q_rope, rope_repeat) * sin.repeat(1,1,1,rope_repeat)
+
+    b, h, s, d = k_rope.shape
+    # k_rope = k_rope.view(b, h, s, d // head_dim, head_dim // 2, 2).transpose(4, 5).reshape(b, h, s, d)
+
+    rope_repeat = k_rope.shape[-1] // cos.shape[-1]
+    k_rope_embed = k_rope * cos.repeat(1,1,1,rope_repeat) + rotate_half(k_rope, rope_repeat) * sin.repeat(1,1,1,rope_repeat)
+
+    q_embed = torch.cat([q_rope_embed, q_nope], dim=-1)
+    k_embed = torch.cat([k_rope_embed, k_nope], dim=-1)
+    return q_embed, k_embed
+
+
+def apply_rotary_pos_emb_interleaved(q, k, cos, sin, rope_head=1):
+    """
+    Shapes of input tensors 
+    q: (batch_size, num_attention_heads, seq_len, num_key_value_heads*head_dim)
+    k: (batch_size, 1, seq_len, num_key_value_heads*head_dim)
+    cos: (1, seq_len, head_dim)
+    sin: (1, seq_len, head_dim)
+
+    Performing MQA with 'num_attention_heads' query heads and a single key-value head. The hidden size of queries, keys and values is latent_dim = num_key_value_heads*head_dim.
+
+
+    Can control number of query heads with positional information using rope_head parameter.
+    See https://github.com/huggingface/transformers/issues/39687 and https://github.dev/huggingface/transformers/blob/main/src/transformers/models/qwen3/modeling_qwen3.py.
+    """
+    head_dim = cos.shape[-1]
+    rope_dim = head_dim * rope_head
+    rope_dim = q.shape[-1]
+    nope_dim = q.shape[-1] - rope_dim
+    q_rope, q_nope = q.split([rope_dim, nope_dim], dim=-1)
+    k_rope, k_nope = k.split([rope_dim, nope_dim], dim=-1)
+    print(f"NK_DEBUG: min")
+    print(torch.min(q_rope[0,0,0,head_dim:]))
+    print(torch.min(q_rope[0,31,0,-head_dim:]))
+    print(f"NK_DEBUG: max")
+    print(torch.max(q_rope[0,0,0,head_dim:]))
+    print(torch.max(q_rope[0,31,0,-head_dim:]))
+    exit(0)
+
 
     cos = cos.unsqueeze(1)
     sin = sin.unsqueeze(1)
