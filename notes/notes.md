@@ -9,4 +9,7 @@ As explained in this [Github issue](https://github.com/MuLabPKU/TransMLA/issues/
 
 A simple example with the following parameter settings will be used to explain the problem:
 
-- `n_head = 16`
+- Size of hidden dimension per head = $d$ = 4
+- Number of key and value heads = $g$ = 2. Note that all key and value heads are merged into a single head for the Multi-Query Attention (MQA) mode of MLA. 
+- Number of query heads = $h$ = 8. This number is actually irrelevant for the subsequent discussion.
+- `freqfold` parameter = $\phi$ = 2
