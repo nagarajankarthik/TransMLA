@@ -83,14 +83,6 @@ def apply_rotary_pos_emb_interleaved(q, k, cos, sin, rope_head=1):
     nope_dim = q.shape[-1] - rope_dim
     q_rope, q_nope = q.split([rope_dim, nope_dim], dim=-1)
     k_rope, k_nope = k.split([rope_dim, nope_dim], dim=-1)
-    print(f"NK_DEBUG: min")
-    print(torch.min(q_rope[0,0,0,head_dim:]))
-    print(torch.min(q_rope[0,31,0,-head_dim:]))
-    print(f"NK_DEBUG: max")
-    print(torch.max(q_rope[0,0,0,head_dim:]))
-    print(torch.max(q_rope[0,31,0,-head_dim:]))
-    exit(0)
-
 
     cos = cos.unsqueeze(1)
     sin = sin.unsqueeze(1)
@@ -146,8 +138,8 @@ class PartialRope(nn.Module):
         self._insert_kv_up_proj()
         if key_outputs is not None:
             Rk = self.joint_complex_pca(key_outputs, freqfold)
-            # self.rotate_k_proj(Rk, freqfold=freqfold)
-            # self.rotate_k_up_proj(Rk, freqfold=freqfold)
+            self.rotate_k_proj(Rk, freqfold=freqfold)
+            self.rotate_k_up_proj(Rk, freqfold=freqfold)
             
     def _insert_kv_up_proj(self):
         self.k_up_proj = nn.Linear(self.latent_dim, self.hidden_size, bias=False, dtype=self.k_proj.weight.dtype, device=self.k_proj.weight.device)
@@ -167,7 +159,9 @@ class PartialRope(nn.Module):
         for i in range(self.head_dim//2//freqfold):
             H = None
             for Z_batch in Z:
+                # d = num_key_value_heads * head_dim
                 b,n,d = Z_batch.shape
+                # View the third dimension of Z_batch as comprising of num_key_value_heads groups. Within each such group, the hidden dimension within the head is split into 2 subgroups corresponding to the real and imaginary parts of each subspace. Each subgroup is then further split into head_dim//(2*freqfold) subgroups.
                 head_batch = deepcopy(Z_batch).view(b,n, self.num_key_value_heads, 2, self.head_dim//2//freqfold, freqfold//self.collapse, self.collapse)
                 head_batch = head_batch.permute(0, 1, 3, 6, 2, 5, 4)
                 head_batch = head_batch.reshape(b,n*2, self.num_key_value_heads*freqfold, self.head_dim//2//freqfold)
@@ -234,21 +228,23 @@ class PartialRope(nn.Module):
 
         bsz, q_len, _ = hidden_states.size()
         query_states = self.q_proj(hidden_states)
+        # The matrix multiplication on the next line also rotates the key states.
         key_states = self.k_proj(hidden_states)
         value_states = self.v_proj(hidden_states)
 
         query_states = query_states.view(bsz, q_len, self.num_attention_heads, self.head_dim)
-        query_states = self.q_norm(query_states)
+        # query_states = self.q_norm(query_states)
         key_states = key_states.view(bsz, q_len, self.num_key_value_heads, self.head_dim)
-        key_states = self.k_norm(key_states)
+        # key_states = self.k_norm(key_states)
         k_up_weight = self.k_up_proj.weight.view(self.num_attention_heads, self.head_dim, self.latent_dim)
+        # This implements the absorb operation and rotation of query_states.
         query_states = torch.einsum("bthd,hdc->bhtc", query_states, k_up_weight)
     
         key_states = key_states.view(bsz, 1, q_len, self.latent_dim)
         value_states = value_states.view(bsz, 1, q_len, self.latent_dim)
 
         cos, sin = position_embeddings
-        query_states, key_states = apply_rotary_pos_emb(query_states, key_states, cos[:,:,::self.collapse], sin[:,:,::self.collapse], self.rope_head)
+        query_states, key_states = apply_rotary_pos_emb_interleaved(query_states, key_states, cos[:,:,::self.collapse], sin[:,:,::self.collapse], self.rope_head)
         
         if past_key_value is not None:
             cache_kwargs = {"sin": sin, "cos": cos, "cache_position": cache_position}  # Specific to RoPE models
