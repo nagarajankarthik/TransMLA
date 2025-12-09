@@ -50,11 +50,11 @@ $$
 
 , where
 
-$
+$$
 j=
 \begin{cases}
 j mod d, & \text{if } j mod d > 0,\\
 d, & \text{if } otherwise.
 \end{cases}
-$
+$$
 
