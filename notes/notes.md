@@ -45,7 +45,7 @@ Apparently, the same rotation matrix must be applied to both the odd and even co
 The [RMSNorm](https://docs.pytorch.org/docs/stable/generated/torch.nn.RMSNorm.html) operation for queries and keys is given by 
 
 $$
-\tilde{q}_i = \gamma_j q_i / \sqrt{\sum_{i = 1}^{gd} q_i^2} \quad \text{and} \quad \tilde{k}_i = \gamma_j k_i / \sqrt{\sum_{i = 1}^{gd} k_i^2}
+\tilde{q}_i = \gamma_j \frac{q_i}{ \sqrt{\sum_{i = 1}^{gd} q_i^2} } \quad \text{and} \quad \tilde{k}_i = \gamma_j \frac{k_i}{ \sqrt{\sum_{i = 1}^{gd} k_i^2}}
 $$
 
 , where
