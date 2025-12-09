@@ -53,8 +53,8 @@ $$
 $$
 j=
 \begin{cases}
-j mod d, & \text{if } j mod d > 0,\\
-d, & \text{if } otherwise.
+j \text{mod } d, & \text{if } j \text{mod } d > 0,\\
+d, & \text{otherwise } .
 \end{cases}
 $$
 
