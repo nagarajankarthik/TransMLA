@@ -40,4 +40,21 @@ $$
 Apparently, the same rotation matrix must be applied to both the odd and even components although it is not clear why.
 
 
+### With single RMSNorm operation applied across all heads
+
+The [RMSNorm](https://docs.pytorch.org/docs/stable/generated/torch.nn.RMSNorm.html) operation for queries and keys is given by 
+
+$$
+\tilde{q}_i = \gamma_j q_i / \sqrt{\sum_{i = 1}^{gd} q_i^2} \quad \text{and} \quad \tilde{k}_i = \gamma_j k_i / \sqrt{\sum_{i = 1}^{gd} k_i^2}
+$$
+
+, where
+
+$
+j=
+\begin{cases}
+j mod d, & \text{if } j mod d > 0,\\
+d, & \text{if } otherwise.
+\end{cases}
+$
 
