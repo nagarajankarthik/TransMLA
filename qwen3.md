@@ -94,7 +94,7 @@ Let $q_{np} = \sum_{t = i - i \text{ mod } d }^{i - i \text{ mod } d + d - 1} q_
 
 
 $$
-(\frac{1}{q_n}[\alpha_1 q_1, \alpha_3 q_3, \alpha_1 q_5, \alpha_3 q_7]; \frac{1}{q_n} [ \alpha_2 q_2, \alpha_4 q_4, \alpha_2 q_6, \alpha_4 q_8])^R \cdot ( \frac{1}{k_n} [ \beta_1 k_1, \beta_3 k_3, \beta_1 k_5, \beta_3 k_7]; \frac{1}{k_n} [\beta_2 k_2, \beta_4 k_4, \beta_2 k_6, \beta_4 k_8])^R
+([\frac{\alpha_0}{q_{n0}} q_0, \frac{\alpha_2}{q_{n0}} q_2, \frac{\alpha_0}{q_{n1}} q_4, \frac{\alpha_2}{q_{n1}} q_6]; [\frac{\alpha_1}{q_{n0}} q_1, \frac{\alpha_3}{q_{n0}} q_3, \frac{\alpha_1}{q_{n1}} q_5, \frac{\alpha_3}{q_{n1}} q_7])^R \cdot ( [ \frac{\beta_0}{k_{n0}} k_0, \frac{\beta_2}{k_{n0}} k_2, \frac{\beta_0}{k_{n1}} k_4, \frac{\beta_0}{k_{n2}} k_6]; [\frac{\beta_1}{k_{n0}} k_1, \frac{\beta_3}{k_{n0}} k_3, \frac{\beta_1}{k_{n1}} k_5, \frac{\beta_3}{k_{n1}} k_7])^R
 $$
 
 Upon performing rotation of queries and keys, one obtains
