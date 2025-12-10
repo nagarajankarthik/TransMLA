@@ -101,19 +101,8 @@ Upon performing rotation of queries and keys, one obtains
 
 
 $$
-(\frac{1}{q_n}U[\alpha_1 q_1, \alpha_3 q_3, \alpha_1 q_5, \alpha_3 q_7]; \frac{1}{q_n} U[ \alpha_2 q_2, \alpha_4 q_4, \alpha_2 q_6, \alpha_4 q_8])^R \cdot ( \frac{1}{k_n} U[ \beta_1 k_1, \beta_3 k_3, \beta_1 k_5, \beta_3 k_7]; \frac{1}{k_n} U[\beta_2 k_2, \beta_4 k_4, \beta_2 k_6, \beta_4 k_8])^R
+(U[\frac{\alpha_0}{q_{n0}} q_0, \frac{\alpha_2}{q_{n0}} q_2, \frac{\alpha_0}{q_{n1}} q_4, \frac{\alpha_2}{q_{n1}} q_6]; U[\frac{\alpha_1}{q_{n0}} q_1, \frac{\alpha_3}{q_{n0}} q_3, \frac{\alpha_1}{q_{n1}} q_5, \frac{\alpha_3}{q_{n1}} q_7])^R \cdot ( U[ \frac{\beta_0}{k_{n0}} k_0, \frac{\beta_2}{k_{n0}} k_2, \frac{\beta_0}{k_{n1}} k_4, \frac{\beta_0}{k_{n2}} k_6]; U[\frac{\beta_1}{k_{n0}} k_1, \frac{\beta_3}{k_{n0}} k_3, \frac{\beta_1}{k_{n1}} k_5, \frac{\beta_3}{k_{n1}} k_7])^R
 $$
 
-The different weights used for the various channels means that the RMSNorm operation must be applied after the up-projection query vectors from dimension $d$ to $gd$ and before the rotation is applied. This is required to ensure that the magnitude of the dot product is preserved after the inclusion of the rotation operation. This means that the rotation operation cannot be fused with up-projection as a single matrix multiplication, implying that the weights for $U$ must be updated separately from those used for the up-projection during training. This causes a problem because it may not be easy or even possible to update the weights for $U$ while imposing the constraint that it remains an orthogonal matrix.
-
-If it can be assumed that the values of RMSNorm scaling parameters are similar for adjacent channels (i.e. $\alpha = \alpha_1 \approx \alpha_2 \approx \alpha_3 \approx \alpha_4$, $\beta = \beta_1 \approx \beta_2 \approx \beta_3 \approx \beta_4$), this problem can be avoided. In this case, one can write
-
-$$
-\frac{\alpha}{q_n}(U[ q_1, q_3, q_5, q_7]; U[ q_2, q_4, q_6, q_8])^R \cdot \frac{\beta}{k_n} ( U[ k_1, k_3, k_5, k_7]; U[ k_2, k_4, k_6, k_8])^R
-$$
-
-Since the terms $\frac{\alpha}{q_n}$ and $\frac{\beta}{k_n}$ are now outside of the rotation operation involving matrix multiplication with $U$, the RMSNorm operation can be applied after the rotation, thereby avoiding the need to optimize $U$ separately. The current hypothesis is that the "standard RMSNorm" mentioned by the TransMLA authors [here](https://github.com/MuLabPKU/TransMLA/issues/38) refers to simply dividing each element of query and key by the square root of the sum of the squares of elements across all heads.
-
-If a single weight is used for all channels, this problem can be avoided. 
-
+Unlike the case in which a single RMSNorm operation is performed across all heads with a single weight applied to all channels, the headwise RMSNorm must be performed after the up-projection of query vectors from dimension $d$ to $gd$ and before the rotation is applied. This implies that the rotation operation cannot be fused with the up-projection as a single matrix multiplication, which leads to the same problem mentioned earlier.
 
