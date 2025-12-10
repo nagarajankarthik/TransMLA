@@ -76,8 +76,6 @@ $$
 
 Since the terms $\frac{\alpha}{q_n}$ and $\frac{\beta}{k_n}$ are now outside of the rotation operation involving matrix multiplication with $U$, the RMSNorm operation can be applied after the rotation, thereby avoiding the need to optimize $U$ separately. The current hypothesis is that the "standard RMSNorm" mentioned by the TransMLA authors [here](https://github.com/MuLabPKU/TransMLA/issues/38) refers to simply dividing each element of query and key by the square root of the sum of the squares of elements across all heads.
 
-If a single weight is used for all channels, this problem can be avoided. 
-
 ### Separate RMSNorm within each query and key head 
 
 
