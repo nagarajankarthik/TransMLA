@@ -45,22 +45,52 @@ Apparently, the same rotation matrix must be applied to both the odd and even co
 The [RMSNorm](https://docs.pytorch.org/docs/stable/generated/torch.nn.RMSNorm.html) operation for queries and keys is given by 
 
 $$
-\tilde{q}_i = \alpha_j \frac{q_i}{ \sqrt{\sum_{i = 1}^{gd} q_i^2} } \quad \text{and} \quad \tilde{k}_i = \beta \frac{k_i}{ \sqrt{\sum_{i = 1}^{gd} k_i^2}}
+\tilde{q}_i = \alpha_j \frac{q_i}{ \sqrt{\sum_{t = 0}^{hd - 1} q_t^2} } \quad \text{and} \quad \tilde{k}_i = \beta_j \frac{k_i}{ \sqrt{\sum_{t = 0}^{gd - 1} k_t^2}}
 $$
 
-, where
-
-$$
-j=
-\begin{cases}
-i \text{mod } d, & \text{if } i \text{mod } d > 0,\\
-d, & \text{otherwise } .
-\end{cases}
-$$
+, where $j = i \mod d$
 
 As demonstrated [here](https://github.com/rasbt/LLMs-from-scratch/blob/main/ch05/11_qwen3/standalone-qwen3.ipynb), Qwen3 applies the RMSNorm operation before performing RoPE.
 
-Let $q_n = \sum_{i = 1}^{hd} q_i^2$ and $k_n = \sum_{i = 1}^{gd} k_i^2$. The dot product becomes
+Let $q_n = \sum_{t = 0}^{hd - 1} q_t^2$ and $k_n = \sum_{t = 0}^{gd - 1} k_t^2$. The dot product becomes
+
+
+$$
+(\frac{1}{q_n}[\alpha_0 q_0, \alpha_2 q_2, \alpha_0 q_4, \alpha_2 q_6]; \frac{1}{q_n} [ \alpha_1 q_1, \alpha_3 q_3, \alpha_1 q_5, \alpha_3 q_7])^R \cdot ( \frac{1}{k_n} [ \beta_0 k_0, \beta_2 k_2, \beta_0 k_4, \beta_2 k_6]; \frac{0}{k_n} [\beta_1 k_1, \beta_3 k_3, \beta_1 k_5, \beta_3 k_7])^R
+$$
+
+Upon performing rotation of queries and keys, one obtains
+
+
+$$
+(\frac{1}{q_n}U[\alpha_0 q_0, \alpha_2 q_2, \alpha_0 q_4, \alpha_2 q_6]; \frac{1}{q_n} U[ \alpha_1 q_1, \alpha_3 q_3, \alpha_1 q_5, \alpha_3 q_7])^R \cdot ( \frac{1}{k_n} U[ \beta_0 k_0, \beta_2 k_2, \beta_0 k_4, \beta_2 k_6]; \frac{1}{k_n} U[\beta_1 k_1, \beta_3 k_3, \beta_1 k_5, \beta_3 k_7])^R
+$$
+
+The different weights used for the various channels means that the RMSNorm operation must be applied after the up-projection query vectors from dimension $d$ to $gd$ and before the rotation is applied. This is required to ensure that the magnitude of the dot product is preserved after the inclusion of the rotation operation. This means that the rotation operation cannot be fused with up-projection as a single matrix multiplication, implying that the weights for $U$ must be updated separately from those used for the up-projection during training. This causes a problem because it may not be easy or even possible to update the weights for $U$ while imposing the constraint that it remains an orthogonal matrix.
+
+If it can be assumed that the values of RMSNorm scaling parameters are similar for adjacent channels (i.e. $\alpha = \alpha_0 \approx \alpha_1 \approx \alpha_2 \approx \alpha_3$, $\beta = \beta_0 \approx \beta_1 \approx \beta_2 \approx \beta_3$), this problem can be avoided. In this case, one can write
+
+$$
+\frac{\alpha}{q_n}(U[ q_0, q_2, q_4, q_6]; U[ q_1, q_3, q_5, q_7])^R \cdot \frac{\beta}{k_n} ( U[ k_0, k_2, k_4, k_6]; U[ k_1, k_3, k_5, k_7])^R
+$$
+
+Since the terms $\frac{\alpha}{q_n}$ and $\frac{\beta}{k_n}$ are now outside of the rotation operation involving matrix multiplication with $U$, the RMSNorm operation can be applied after the rotation, thereby avoiding the need to optimize $U$ separately. The current hypothesis is that the "standard RMSNorm" mentioned by the TransMLA authors [here](https://github.com/MuLabPKU/TransMLA/issues/38) refers to simply dividing each element of query and key by the square root of the sum of the squares of elements across all heads.
+
+If a single weight is used for all channels, this problem can be avoided. 
+
+### Separate RMSNorm within each query and key head 
+
+
+In this case, the [RMSNorm](https://docs.pytorch.org/docs/stable/generated/torch.nn.RMSNorm.html) operation for queries and keys is given by 
+
+$$
+\tilde{q}_i = \alpha_j \frac{q_i}{ \sqrt{\sum_{t = (i - i \text{ mod } d }^{i - i \text{ mod } d + d - 1} q_t^2} } \quad \text{and} \quad \tilde{k}_i = \beta_j \frac{k_i}{ \sqrt{\sum_{t = (i - i \text{ mod } d }}^{i - i \text{ mod } d + d - 1} k_t^2}}
+$$
+
+, where $j = i \mod d$.
+
+
+Let $q_{np} = \sum_{t = i - i \text{ mod } d }^{i - i \text{ mod } d + d - 1} q_t^2$ and $k_{np} = \sum_{t = i - i \text{ mod } d }^{i - i \text{ mod } d + d - 1} k_t^2$. Here, $p = (i - i \text{ mod } d) / d$. The dot product becomes
 
 
 $$
@@ -74,7 +104,7 @@ $$
 (\frac{1}{q_n}U[\alpha_1 q_1, \alpha_3 q_3, \alpha_1 q_5, \alpha_3 q_7]; \frac{1}{q_n} U[ \alpha_2 q_2, \alpha_4 q_4, \alpha_2 q_6, \alpha_4 q_8])^R \cdot ( \frac{1}{k_n} U[ \beta_1 k_1, \beta_3 k_3, \beta_1 k_5, \beta_3 k_7]; \frac{1}{k_n} U[\beta_2 k_2, \beta_4 k_4, \beta_2 k_6, \beta_4 k_8])^R
 $$
 
-The different weights used for the various channels means that the RMSNorm operation must be applied after the up-projection query vectors from dimension $d$ to $gd$ and before the rotation is applied. This is required to ensure that the magnitude of the dot product is preserved after the inclusion of the rotation operation. This means that the rotation operation cannot be fused with up-projection as a single matrix multiplication, implying that the weights for $U$ must be updated separately from those used for the up-projection during training. This causes a problem because it may not be easy to update the weights for $U$ while imposing the constraint that it remains an orthogonal matrix.
+The different weights used for the various channels means that the RMSNorm operation must be applied after the up-projection query vectors from dimension $d$ to $gd$ and before the rotation is applied. This is required to ensure that the magnitude of the dot product is preserved after the inclusion of the rotation operation. This means that the rotation operation cannot be fused with up-projection as a single matrix multiplication, implying that the weights for $U$ must be updated separately from those used for the up-projection during training. This causes a problem because it may not be easy or even possible to update the weights for $U$ while imposing the constraint that it remains an orthogonal matrix.
 
 If it can be assumed that the values of RMSNorm scaling parameters are similar for adjacent channels (i.e. $\alpha = \alpha_1 \approx \alpha_2 \approx \alpha_3 \approx \alpha_4$, $\beta = \beta_1 \approx \beta_2 \approx \beta_3 \approx \beta_4$), this problem can be avoided. In this case, one can write
 
@@ -82,5 +112,8 @@ $$
 \frac{\alpha}{q_n}(U[ q_1, q_3, q_5, q_7]; U[ q_2, q_4, q_6, q_8])^R \cdot \frac{\beta}{k_n} ( U[ k_1, k_3, k_5, k_7]; U[ k_2, k_4, k_6, k_8])^R
 $$
 
+Since the terms $\frac{\alpha}{q_n}$ and $\frac{\beta}{k_n}$ are now outside of the rotation operation involving matrix multiplication with $U$, the RMSNorm operation can be applied after the rotation, thereby avoiding the need to optimize $U$ separately. The current hypothesis is that the "standard RMSNorm" mentioned by the TransMLA authors [here](https://github.com/MuLabPKU/TransMLA/issues/38) refers to simply dividing each element of query and key by the square root of the sum of the squares of elements across all heads.
 
 If a single weight is used for all channels, this problem can be avoided. 
+
+
