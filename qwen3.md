@@ -22,19 +22,19 @@ The hidden dimension of each query vector is up-projected from $d = 4$ to $gd = 
 
 
 $$
-[q_1, q_2, q_3, q_4, q_5, q_6, q_7, q_8]^R \cdot [k_1, k_2, k_3, k_4, k_5, k_6, k_7, k_8]^R 
+[q_0, q_1, q_2, q_3, q_4, q_5, q_6, q_7]^R \cdot [k_0, k_1, k_2, k_3, k_4, k_5, k_6, k_7]^R 
 $$
 
 , where the superscript 'R' denotes [Rotary Position Embeddings](https://arxiv.org/pdf/2104.09864). Let $q_{2l - 1}$ be the real components of the query vectors and $q_{2l}$ be the imaginary components, where $1 \le l \le 4$. In the subsequent discussion, the real and imaginary components will be grouped together. Hence, the dot product can be written as:
 
 $$
-([q_1, q_3, q_5, q_7]; [q_2, q_4, q_6, q_8])^R \cdot ([k_1, k_3, k_5, k_7]; [k_2, k_4, k_6, k_8])^R
+([q_0, q_2, q_4, q_6]; [q_1, q_3, q_5, q_7])^R \cdot ([k_0, k_2, k_4, k_6]; [k_1, k_3, k_5, k_7])^R
 $$
 
 The proof in Appendix B of the [TransMLA paper](https://arxiv.org/pdf/2502.07864) shows that one can apply a rotation matrix $U$ to the real and imaginary components of both the query and key vectors without changing the magnitude of the dot product. For the case $\phi = 2$, the dot product becomes 
 
 $$
-(U[q_1, q_3, q_5, q_7]; U[q_2, q_4, q_6, q_8])^R \cdot (U[k_1, k_3, k_5, k_7]; U[k_2, k_4, k_6, k_8])^R
+(U[q_0, q_2, q_4, q_6]; U[q_1, q_3, q_5, q_7])^R \cdot (U[k_0, k_2, k_4, k_6]; U[k_1, k_3, k_5, k_7])^R
 $$
 
 Apparently, the same rotation matrix must be applied to both the odd and even components although it is not clear why.
