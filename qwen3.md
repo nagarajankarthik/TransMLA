@@ -56,7 +56,7 @@ Let $q_n = \sum_{t = 0}^{hd - 1} q_t^2$ and $k_n = \sum_{t = 0}^{gd - 1} k_t^2$.
 
 
 $$
-(\frac{1}{q_n}[\alpha_0 q_0, \alpha_2 q_2, \alpha_0 q_4, \alpha_2 q_6]; \frac{1}{q_n} [ \alpha_1 q_1, \alpha_3 q_3, \alpha_1 q_5, \alpha_3 q_7])^R \cdot ( \frac{1}{k_n} [ \beta_0 k_0, \beta_2 k_2, \beta_0 k_4, \beta_2 k_6]; \frac{0}{k_n} [\beta_1 k_1, \beta_3 k_3, \beta_1 k_5, \beta_3 k_7])^R
+(\frac{1}{q_n}[\alpha_0 q_0, \alpha_2 q_2, \alpha_0 q_4, \alpha_2 q_6]; \frac{1}{q_n} [ \alpha_1 q_1, \alpha_3 q_3, \alpha_1 q_5, \alpha_3 q_7])^R \cdot ( \frac{1}{k_n} [ \beta_0 k_0, \beta_2 k_2, \beta_0 k_4, \beta_2 k_6]; \frac{1}{k_n} [\beta_1 k_1, \beta_3 k_3, \beta_1 k_5, \beta_3 k_7])^R
 $$
 
 Upon performing rotation of queries and keys, one obtains
