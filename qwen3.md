@@ -84,7 +84,7 @@ If a single weight is used for all channels, this problem can be avoided.
 In this case, the [RMSNorm](https://docs.pytorch.org/docs/stable/generated/torch.nn.RMSNorm.html) operation for queries and keys is given by 
 
 $$
-\tilde{q}_i = \alpha_j \frac{q_i}{ \sqrt{\sum_{t = i - i \text{ mod } d }^{i - i \text{ mod } d + d - 1} q_t^2} } \quad \text{and} \quad \tilde{k}_i = \beta_j \frac{k_i}{ \sqrt{\sum_{t = i - i \text{ mod } d }}^{i - i \text{ mod } d + d - 1} k_t^2}}
+\tilde{q}_i = \alpha_j \frac{q_i}{ \sqrt{\sum_{t = i - i \text{ mod } d }^{i - i \text{ mod } d + d - 1} q_t^2} } \quad \text{and} \quad \tilde{k}_i = \beta_j \frac{k_i}{ \sqrt{\sum_{t = i - i \text{ mod } d }^{i - i \text{ mod } d + d - 1} k_t^2}}
 $$
 
 , where $j = i \mod d$.
