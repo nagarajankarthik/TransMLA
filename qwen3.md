@@ -11,14 +11,14 @@ A simple example with the following parameter settings will be used to explain t
 
 - Size of hidden dimension per key-value head = $d$ = 4
 - Number of key and value heads = $g$ = 2. Note that all key and value heads are merged into a single head for the Multi-Query Attention (MQA) mode of MLA. 
-- Number of query heads = $h$ = 8. This number is actually irrelevant for the subsequent discussion.
+- Number of query heads = $h$. The exact value is not relevant for the subsequent discussion.
 - `freqfold` parameter = $\phi$ = 2
 
 Consider the dot product of query and key in 3 different scenarios:
 
 ### No RMSNorm
 
-The hidden dimension of each query vector is up-projected from $d = 4$ to $gd = 8$ before performing the dot product with the key vector. In the MQA mode, there will be $h$ query vectors and a single key vector. All these vectors will have dimension $gd$. The dot product is given by:
+The hidden dimension of each query vector is up-projected from $d = 4$ to $gd = 8$ before performing the dot product with the key vector. In the MQA mode, there will be $h$ query vectors and a single key vector. All these vectors will have dimension $gd$. The dot product of the query vector from the first query head with the single key vector obtained by merging all key heads for one token is given by:
 
 
 $$
