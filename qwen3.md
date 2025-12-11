@@ -25,7 +25,7 @@ $$
 [q_0, q_1, q_2, q_3, q_4, q_5, q_6, q_7]^R \cdot [k_0, k_1, k_2, k_3, k_4, k_5, k_6, k_7]^R 
 $$
 
-, where the superscript 'R' denotes [Rotary Position Embeddings](https://arxiv.org/pdf/2104.09864). Let $q_{2l - 1}$ be the real components of the query vectors and $q_{2l}$ be the imaginary components, where $1 \le l \le 4$. In the subsequent discussion, the real and imaginary components will be grouped together. Hence, the dot product can be written as:
+, where the superscript 'R' denotes [Rotary Position Embeddings](https://arxiv.org/pdf/2104.09864). Let $q_{2l + 1}$ be the imaginary components of the query vectors and $q_{2l}$ be the real components, where $0 \le l \le 3$. In the subsequent discussion, the real and imaginary components will be grouped together. Hence, the dot product can be written as:
 
 $$
 ([q_0, q_2, q_4, q_6]; [q_1, q_3, q_5, q_7])^R \cdot ([k_0, k_2, k_4, k_6]; [k_1, k_3, k_5, k_7])^R
@@ -52,7 +52,7 @@ $$
 
 As demonstrated [here](https://github.com/rasbt/LLMs-from-scratch/blob/main/ch05/11_qwen3/standalone-qwen3.ipynb), Qwen3 applies the RMSNorm operation before performing RoPE.
 
-Let $q_n = \sum_{t = 0}^{hd - 1} q_t^2$ and $k_n = \sum_{t = 0}^{gd - 1} k_t^2$. The dot product becomes
+Let $q_n = \sqrt{\sum_{t = 0}^{hd - 1} q_t^2}$ and $k_n = \sqrt{\sum_{t = 0}^{gd - 1} k_t^2}$. The dot product becomes
 
 
 $$
@@ -66,7 +66,7 @@ $$
 (\frac{1}{q_n}U[\alpha_0 q_0, \alpha_2 q_2, \alpha_0 q_4, \alpha_2 q_6]; \frac{1}{q_n} U[ \alpha_1 q_1, \alpha_3 q_3, \alpha_1 q_5, \alpha_3 q_7])^R \cdot ( \frac{1}{k_n} U[ \beta_0 k_0, \beta_2 k_2, \beta_0 k_4, \beta_2 k_6]; \frac{1}{k_n} U[\beta_1 k_1, \beta_3 k_3, \beta_1 k_5, \beta_3 k_7])^R
 $$
 
-The different weights used for the various channels means that the RMSNorm operation must be applied after the up-projection query vectors from dimension $d$ to $gd$ and before the rotation is applied. This is required to ensure that the magnitude of the dot product is preserved after the inclusion of the rotation operation. This means that the rotation operation cannot be fused with up-projection as a single matrix multiplication, implying that the weights for $U$ must be updated separately from those used for the up-projection during training. This causes a problem because it may not be easy or even possible to update the weights for $U$ while imposing the constraint that it remains an orthogonal matrix.
+The different weights used for the various channels means that the RMSNorm operation must be applied after the up-projection query vectors from dimension $d$ to $gd$ and before the rotation is applied. This is required to ensure that the magnitude of the dot product is preserved after the inclusion of the rotation operation. This means that the rotation operation cannot be fused with up-projection as a single matrix multiplication, implying that the weights for $U$ must be updated separately from those used for the up-projection during training. This causes a problem because it may not be easy or even possible to update the weights for $U$ while imposing the constraint that it remains an orthogonal matrix (i.e $U^T U = I$)
 
 If it can be assumed that the values of RMSNorm scaling parameters are similar for adjacent channels (i.e. $\alpha = \alpha_0 \approx \alpha_1 \approx \alpha_2 \approx \alpha_3$, $\beta = \beta_0 \approx \beta_1 \approx \beta_2 \approx \beta_3$), this problem can be avoided. In this case, one can write
 
@@ -88,7 +88,7 @@ $$
 , where $j = i \mod d$.
 
 
-Let $q_{np} = \sum_{t = i - i \text{ mod } d }^{i - i \text{ mod } d + d - 1} q_t^2$ and $k_{np} = \sum_{t = i - i \text{ mod } d }^{i - i \text{ mod } d + d - 1} k_t^2$. Here, $p = (i - i \text{ mod } d) / d$. The dot product becomes
+Let $q_{np} = \sqrt{\sum_{t = i - i \text{ mod } d }^{i - i \text{ mod } d + gd - 1} q_t^2}$ and $k_{np} = \sqrt{\sum_{t = i - i \text{ mod } d }^{i - i \text{ mod } d + d - 1} k_t^2}$. Here, $p = (i - i \text{ mod } d) / d$. The dot product becomes
 
 
 $$
