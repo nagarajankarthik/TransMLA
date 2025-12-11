@@ -82,24 +82,24 @@ Since the terms $\frac{\alpha}{q_n}$ and $\frac{\beta}{k_n}$ are now outside of 
 In this case, the [RMSNorm](https://docs.pytorch.org/docs/stable/generated/torch.nn.RMSNorm.html) operation for queries and keys is given by 
 
 $$
-\tilde{q}_i = \alpha_j \frac{q_i}{ \sqrt{\sum_{t = i - i \text{ mod } d }^{i - i \text{ mod } d + d - 1} q_t^2} } \quad \text{and} \quad \tilde{k}_i = \beta_j \frac{k_i}{ \sqrt{\sum_{t = i - i \text{ mod } d }^{i - i \text{ mod } d + d - 1} k_t^2}}
+\tilde{q}_i = \alpha_t \frac{q_i}{ \sqrt{\sum_{t = i - i \text{ mod } gd }^{i - i \text{ mod } gd + gd - 1} q_t^2} } \quad \text{and} \quad \tilde{k}_i = \beta_j \frac{k_i}{ \sqrt{\sum_{t = i - i \text{ mod } d }^{i - i \text{ mod } d + d - 1} k_t^2}}
 $$
 
-, where $j = i \mod d$.
+, where $t = i \mod gd$ and $j = i \mod d$.
 
 
-Let $q_{np} = \sqrt{\sum_{t = i - i \text{ mod } d }^{i - i \text{ mod } d + gd - 1} q_t^2}$ and $k_{np} = \sqrt{\sum_{t = i - i \text{ mod } d }^{i - i \text{ mod } d + d - 1} k_t^2}$. Here, $p = (i - i \text{ mod } d) / d$. The dot product becomes
+Let $q_{np} = \sqrt{\sum_{t = i - i \text{ mod } gd }^{i - i \text{ mod } gd + gd - 1} q_t^2}$ and $k_{np} = \sqrt{\sum_{t = i - i \text{ mod } d }^{i - i \text{ mod } d + d - 1} k_t^2}$. Here, $p = (i - i \text{ mod } d) / d$. The dot product becomes
 
 
 $$
-([\frac{\alpha_0}{q_{n0}} q_0, \frac{\alpha_2}{q_{n0}} q_2, \frac{\alpha_0}{q_{n1}} q_4, \frac{\alpha_2}{q_{n1}} q_6]; [\frac{\alpha_1}{q_{n0}} q_1, \frac{\alpha_3}{q_{n0}} q_3, \frac{\alpha_1}{q_{n1}} q_5, \frac{\alpha_3}{q_{n1}} q_7])^R \cdot ( [ \frac{\beta_0}{k_{n0}} k_0, \frac{\beta_2}{k_{n0}} k_2, \frac{\beta_0}{k_{n1}} k_4, \frac{\beta_0}{k_{n2}} k_6]; [\frac{\beta_1}{k_{n0}} k_1, \frac{\beta_3}{k_{n0}} k_3, \frac{\beta_1}{k_{n1}} k_5, \frac{\beta_3}{k_{n1}} k_7])^R
+([\frac{\alpha_0}{q_{n0}} q_0, \frac{\alpha_2}{q_{n0}} q_2, \frac{\alpha_4}{q_{n0}} q_4, \frac{\alpha_6}{q_{n0}} q_6]; [\frac{\alpha_1}{q_{n0}} q_1, \frac{\alpha_3}{q_{n0}} q_3, \frac{\alpha_5}{q_{n0}} q_5, \frac{\alpha_7}{q_{n0}} q_7])^R \cdot ( [ \frac{\beta_0}{k_{n0}} k_0, \frac{\beta_2}{k_{n0}} k_2, \frac{\beta_0}{k_{n1}} k_4, \frac{\beta_0}{k_{n1}} k_6]; [\frac{\beta_1}{k_{n0}} k_1, \frac{\beta_3}{k_{n0}} k_3, \frac{\beta_1}{k_{n1}} k_5, \frac{\beta_3}{k_{n1}} k_7])^R
 $$
 
 Upon performing rotation of queries and keys, one obtains
 
 
 $$
-(U[\frac{\alpha_0}{q_{n0}} q_0, \frac{\alpha_2}{q_{n0}} q_2, \frac{\alpha_0}{q_{n1}} q_4, \frac{\alpha_2}{q_{n1}} q_6]; U[\frac{\alpha_1}{q_{n0}} q_1, \frac{\alpha_3}{q_{n0}} q_3, \frac{\alpha_1}{q_{n1}} q_5, \frac{\alpha_3}{q_{n1}} q_7])^R \cdot ( U[ \frac{\beta_0}{k_{n0}} k_0, \frac{\beta_2}{k_{n0}} k_2, \frac{\beta_0}{k_{n1}} k_4, \frac{\beta_0}{k_{n2}} k_6]; U[\frac{\beta_1}{k_{n0}} k_1, \frac{\beta_3}{k_{n0}} k_3, \frac{\beta_1}{k_{n1}} k_5, \frac{\beta_3}{k_{n1}} k_7])^R
+(U[\frac{\alpha_0}{q_{n0}} q_0, \frac{\alpha_2}{q_{n0}} q_2, \frac{\alpha_4}{q_{n0}} q_4, \frac{\alpha_6}{q_{n0}} q_6]; U[\frac{\alpha_1}{q_{n0}} q_1, \frac{\alpha_3}{q_{n0}} q_3, \frac{\alpha_5}{q_{n0}} q_5, \frac{\alpha_7}{q_{n0}} q_7])^R \cdot ( U[ \frac{\beta_0}{k_{n0}} k_0, \frac{\beta_2}{k_{n0}} k_2, \frac{\beta_0}{k_{n1}} k_4, \frac{\beta_2}{k_{n1}} k_6]; U[\frac{\beta_1}{k_{n0}} k_1, \frac{\beta_3}{k_{n0}} k_3, \frac{\beta_1}{k_{n1}} k_5, \frac{\beta_3}{k_{n1}} k_7])^R
 $$
 
 Unlike the case in which a single RMSNorm operation is performed across all heads with a single weight applied to all channels, the headwise RMSNorm must be performed after the up-projection of query vectors from dimension $d$ to $gd$ and before the rotation is applied. This implies that the rotation operation cannot be fused with the up-projection as a single matrix multiplication, which leads to the same problem mentioned earlier.
